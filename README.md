@@ -1,8 +1,8 @@
 # Tensorflow Implementation of DeepMind's Parallel WaveNet 
-paper https://arxiv.org/pdf/1711.10433.pdf 
+Paper https://arxiv.org/pdf/1711.10433.pdf 
 
 
-<img src ="images/parallel_wavenet.png>
+<img src="images/parallel_wavenet.png">
 ## Requirements
 
 TensorFlow needs to be installed before running the training script.

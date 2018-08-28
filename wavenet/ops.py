@@ -85,3 +85,11 @@ def mu_law_decode(output, quantization_channels):
         magnitude = (1 / mu) * ((1 + mu)**abs(signal) - 1)
         return tf.sign(signal) * magnitude
 
+def log_sum_exp(x):
+    """
+        Numerically stable log_sum_exp implementation that prevents overflow
+        log_sum_exp: log(sum(exp(x), axis=-1))
+    """
+    axis = len(x.get_shape()) - 1
+    
+
