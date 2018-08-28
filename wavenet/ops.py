@@ -89,7 +89,21 @@ def log_sum_exp(x):
     """
         Numerically stable log_sum_exp implementation that prevents overflow
         log_sum_exp: log(sum(exp(x), axis=-1))
+        
     """
     axis = len(x.get_shape()) - 1
-    
+    m = tf.reduce_max(x, axis)
+    m2 = tf.reduce_max(x, axis, keep_dims = True)
+    return m + tf.log(tf.reduce_sum(tf.exp(x - m2),axis))
+
+def log_prob_from_logits(x):
+    """
+        Numerically stable log_softmax implementation that prevents overflow
+    """
+    axis = len(x.get_shape()) - 1
+    m = tf.reduce_max(x, axis, keep_dims = True)
+    return x - m - tf.log(tf.reduce_sum(tf.exp(x -m), axis, keep_dims = True))
+
+
+
 
