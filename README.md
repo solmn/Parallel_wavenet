@@ -1,3 +1,21 @@
+# Tensorflow Implementation of DeepMind's Parallel WaveNet paper https://arxiv.org/pdf/1711.10433.pdf 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # A TensorFlow implementation of DeepMind's WaveNet paper
 
 [![Build Status](https://travis-ci.org/ibab/tensorflow-wavenet.svg?branch=master)](https://travis-ci.org/ibab/tensorflow-wavenet)
