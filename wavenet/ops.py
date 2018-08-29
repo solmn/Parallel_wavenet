@@ -149,4 +149,33 @@ def discretized_mix_logistic_loss(x, l, nr_mix, quantization_channels=65536, sum
     log_probs = log_probs + log_prob_from_logits(logit_probs)  # [B, T, nr_mix]
     final_log = log_sum_exp(log_probs)  # [B, T]
     return -tf.reduce_mean(final_log)  # negative log-likelihood
+def sample_from_discretized_mix_logistic(l, nr_mix, scale_target=1):
+    """ Sample from discretized logistic mixtures
+    l: [B, T, nr_mix*3]
+    nr_mix: number of mixtures
+    """
+    logit_probs = l[:, :, :nr_mix]  # [B, T, nr_mix]
+    # sample mixture indicator from softmax
+    sel = tf.one_hot(  # [B, T, nr_mix]
+        tf.argmax(  # [B, T]
+            logit_probs - tf.log(-tf.log(  # [B, T, nr_mix]
+                tf.random_uniform(logit_probs.get_shape(), minval=1e-5, maxval=1. - 1e-5))),
+            2),
+        depth=nr_mix, dtype=tf.float32)
 
+    # select logistic parameters
+    means = tf.reduce_sum(l[:, :, nr_mix: 2 * nr_mix] * sel, 2)  # [B, T]
+
+    log_scales = tf.maximum(tf.reduce_sum(  # [B, T]
+        l[:, :, 2 * nr_mix: 3 * nr_mix] * sel, 2), LOG_SCALE_MINIMUM)
+    # sample from logistic & clip to interval
+    # we don't actually round to the nearest 8bit value when sampling
+    u = tf.random_uniform(means.get_shape(), minval=1e-5, maxval=1. - 1e-5)  # [B, T]
+    x = means + tf.exp(log_scales) * (tf.log(u) - tf.log(1. - u))  # inverse of sigmoid, [B, T]
+    x = x / scale_target
+    x = tf.clip_by_value(x, -0.9999999, 0.9999999)  # ITU-Ts it necessary?
+
+    # negative log-likelihood
+    z = (x - means) * tf.exp(-log_scales)  # z = (x - u) / S
+    log_likelihood = z - log_scales - 2. * tf.nn.softplus(z)
+    return x, log_likelihood
