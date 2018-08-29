@@ -104,6 +104,49 @@ def log_prob_from_logits(x):
     m = tf.reduce_max(x, axis, keep_dims = True)
     return x - m - tf.log(tf.reduce_sum(tf.exp(x -m), axis, keep_dims = True))
 
+def discretized_mix_logistic_loss(x, l, nr_mix, quantization_channels=65536, sum_all=True, scale_target=1):
+    """ Negative? log-likelihood for mixture of discretized logistics,
+    assumes the data has been rescaled to [-1,1] interval
+    Args:
+        x: [B, T, 1], value interal: [-1, 1]
+        l: [B, T, nr_mix*3]
+        nr_mix: number of logistic mixtures
+    """
+    x = tf.squeeze(x, axis=2)  # [B, T, 1] --> [B, T]
+    # here and below: unpacking the params of the mixture of logistics
+    logit_probs = l[:, :, :nr_mix]  # [B, T, nr_mix]
+    means = l[:, :, nr_mix: 2 * nr_mix]  # [B, T, nr_mix]
+    log_scales = tf.maximum(l[:, :, 2 * nr_mix: 3 * nr_mix],
+                            LOG_SCALE_MINIMUM)  # [B, T, nr_mix]  modified from -7 to -14 to fit audio data
 
+    x = tf.expand_dims(x, axis=-1) + tf.zeros(x.get_shape().as_list() + [nr_mix])  # [B, T, nr_mix]
+    centered_x = x - means
+    inv_stdv = tf.exp(-log_scales)  # [B, T, nr_mix]
 
+    delta = (scale_target * 1.) / quantization_channels
+    plus_in = inv_stdv * (centered_x + delta)  # [B, T, nr_mix]
+    cdf_plus = tf.nn.sigmoid(plus_in)
+    min_in = inv_stdv * (centered_x - delta)  # [B, T, nr_mix]
+    cdf_min = tf.nn.sigmoid(min_in)
+
+    # log probability for edge case of 0 (before scaling)
+    log_cdf_plus = plus_in - tf.nn.softplus(plus_in)
+    # log probability for edge case of 255 (before scaling)
+    log_one_minus_cdf_min = -tf.nn.softplus(min_in)
+    cdf_delta = cdf_plus - cdf_min  # probability for all other cases
+
+    mid_in = inv_stdv * centered_x
+    # log probability in the center of the bin, to be used in extreme cases
+    # (not actually used in our code)
+    log_pdf_mid = mid_in - log_scales - 2. * tf.nn.softplus(mid_in)
+
+    
+    log_probs = tf.where(x < -0.999 * scale_target, log_cdf_plus,  # [B, T, nr_mix]
+                         tf.where(x > 0.999 * scale_target, log_one_minus_cdf_min,
+                                  tf.where(cdf_delta > 1e-5, tf.log(tf.maximum(cdf_delta, 1e-12)),
+                                           log_pdf_mid - np.log(32767.5 / scale_target))))
+
+    log_probs = log_probs + log_prob_from_logits(logit_probs)  # [B, T, nr_mix]
+    final_log = log_sum_exp(log_probs)  # [B, T]
+    return -tf.reduce_mean(final_log)  # negative log-likelihood
 

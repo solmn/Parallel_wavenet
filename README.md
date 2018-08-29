@@ -1,4 +1,4 @@
-# Tensorflow Implementation of Deep Mind's Parallel WaveNet 
+# Tensorflow implementation of deep mind's parallel WaveNet paper
 Paper https://arxiv.org/pdf/1711.10433.pdf 
 
 
