@@ -289,6 +289,9 @@ class WaveNetModel(object):
         conv_filter = causal_conv(input_batch, weights_filter, dilation)
         conv_gate = causal_conv(input_batch, weights_gate, dilation)
 
+        
+
+
         if global_condition_batch is not None:
             weights_gc_filter = variables['gc_filtweights']
             conv_filter = conv_filter + tf.nn.conv1d(global_condition_batch,
@@ -664,14 +667,22 @@ class WaveNetModel(object):
                         [self.batch_size, -1, self.quantization_channels]),
                     [0, self.receptive_field, 0],
                     [-1, -1, -1])
-                target_output = tf.reshape(target_output,
+                if self.scalar_input:
+                    loss = discretized_mix_logistic_loss(raw_output, target_output,
+                                                             num_class=self.quantization_channels,
+                                                             log_scale_min = -7.0,
+                                                             reduce=False)
+                    reduced_loss = tf.reduce_mean(loss)
+                else:
+
+                    target_output = tf.reshape(target_output,
                                            [-1, self.quantization_channels])
-                prediction = tf.reshape(raw_output,
+                    prediction = tf.reshape(raw_output,
                                         [-1, self.quantization_channels])
-                loss = tf.nn.softmax_cross_entropy_with_logits(
-                    logits=prediction,
-                    labels=target_output)
-                reduced_loss = tf.reduce_mean(loss)
+                    loss = tf.nn.softmax_cross_entropy_with_logits(
+                        logits=prediction,
+                        labels=target_output)
+                    reduced_loss = tf.reduce_mean(loss)
 
                 tf.summary.scalar('loss', reduced_loss)
 
