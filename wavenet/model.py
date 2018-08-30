@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from .ops import causal_conv, mu_law_encode
-
+from .mixture import discretized_mix_logistic_loss, sample_from_discretized_mix_logistic
 
 def create_variable(name, shape):
     '''Create a convolution filter variable with the specified name and shape,
@@ -55,6 +55,7 @@ class WaveNetModel(object):
                  scalar_input=False,
                  initial_filter_width=32,
                  histograms=False,
+                 local_conditional_channels = None,
                  global_condition_channels=None,
                  global_condition_cardinality=None):
         '''Initializes the WaveNet model.
@@ -187,7 +188,17 @@ class WaveNetModel(object):
                             [1,
                              self.dilation_channels,
                              self.skip_channels])
-
+                        if(self.local_condition_channel is not None):
+                            current['lc_gate_weights'] = create_variables(
+                                'lc_gate',
+                                [1, self.local_condition_channels,
+                                self.dilation_channels]
+                            )
+                            current['lc_filter_weights'] = create_variables(
+                                'lc_filter',
+                                [1, self.local_condition_channels,
+                                self.dilation_channels]
+                            )
                         if self.global_condition_channels is not None:
                             current['gc_gateweights'] = create_variable(
                                 'gc_gate',
