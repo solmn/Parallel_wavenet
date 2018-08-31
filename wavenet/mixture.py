@@ -30,7 +30,7 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -
         Note: Assumed that the input is scaled to [-1, 1].
 
         Args:
-            y_hat (Tensor): Predicted output (B x T x C)
+            y_hat (Tensor): Predicted output (B x T x C)[Batch_size, time_length, channels]
             y (Tensor): Target (B x T x 1).
             num_classes (int): Number of classes
             log_scale_min (float):  the log scale minimum value

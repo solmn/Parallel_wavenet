@@ -50,7 +50,9 @@ class WaveNetModel(object):
                  residual_channels,
                  dilation_channels,
                  skip_channels,
-                 quantization_channels=2**8,
+                 quantization_channels=2**16,
+                 output_channels = 3 * 10,
+                 min_log_scale = -7.0,
                  use_biases=False,
                  scalar_input=False,
                  initial_filter_width=32,
@@ -101,7 +103,9 @@ class WaveNetModel(object):
         self.filter_width = filter_width
         self.residual_channels = residual_channels
         self.dilation_channels = dilation_channels
-        self.quantization_channels = quantization_channels
+        self.quantization_channels = quantization_channels,
+        self.output_channels = output_channels,
+        self.log_min_scale = log_min_scale,
         self.use_biases = use_biases
         self.skip_channels = skip_channels
         self.scalar_input = scalar_input
@@ -154,7 +158,7 @@ class WaveNetModel(object):
                     initial_channels = 1
                     initial_filter_width = self.initial_filter_width
                 else:
-                    initial_channels = self.quantization_channels
+                    initial_channels = self.output_channels
                     initial_filter_width = self.filter_width
                 layer['filter'] = create_variable(
                     'filter',
@@ -232,14 +236,14 @@ class WaveNetModel(object):
                     [1, self.skip_channels, self.skip_channels])
                 current['postprocess2'] = create_variable(
                     'postprocess2',
-                    [1, self.skip_channels, self.quantization_channels])
+                    [1, self.skip_channels, self.output_channels])
                 if self.use_biases:
                     current['postprocess1_bias'] = create_bias_variable(
                         'postprocess1_bias',
                         [self.skip_channels])
                     current['postprocess2_bias'] = create_bias_variable(
                         'postprocess2_bias',
-                        [self.quantization_channels])
+                        [self.output_channels])
                 var['postprocessing'] = current
 
         return var
@@ -465,9 +469,9 @@ class WaveNetModel(object):
         q = tf.FIFOQueue(
             1,
             dtypes=tf.float32,
-            shapes=(self.batch_size, self.quantization_channels))
+            shapes=(self.batch_size, self.output_channels))
         init = q.enqueue_many(
-            tf.zeros((1, self.batch_size, self.quantization_channels)))
+            tf.zeros((1, self.batch_size, self.output_channels)))
 
         current_state = q.dequeue()
         push = q.enqueue([current_layer])
@@ -536,9 +540,9 @@ class WaveNetModel(object):
         with tf.name_scope('one_hot_encode'):
             encoded = tf.one_hot(
                 input_batch,
-                depth=self.quantization_channels,
+                depth=self.output_channels,
                 dtype=tf.float32)
-            shape = [self.batch_size, -1, self.quantization_channels]
+            shape = [self.batch_size, -1, self.output_channels]
             encoded = tf.reshape(encoded, shape)
         return encoded
 
@@ -595,17 +599,17 @@ class WaveNetModel(object):
             raw_output = self._create_network(encoded, gc_embedding)
 
             if self.scalar_input:
-               out = tf.reshape(raw_output, [self.batch_size, -1, self.quantization_channels])
+               out = tf.reshape(raw_output, [self.batch_size, -1, self.output_channels])
                last = sample_from_discretized_mix_logistic(out, log_scale_min = -7.)
             else:
-                out = tf.reshape(raw_output, [-1, self.quantization_channels])
+                out = tf.reshape(raw_output, [-1, self.output_channels])
                 # Cast to float64 to avoid bug in TensorFlow
                 proba = tf.cast(
                     tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
                 last = tf.slice(
                     proba,
                     [tf.shape(proba)[0] - 1, 0],
-                    [1, self.quantization_channels])
+                    [1, self.output_channels])
             return tf.reshape(last, [-1])
 
     def predict_proba_incremental(self, waveform, global_condition=None,
@@ -620,21 +624,25 @@ class WaveNetModel(object):
             raise NotImplementedError("Incremental generation does not "
                                       "support scalar input yet.")
         with tf.name_scope(name):
-            encoded = tf.one_hot(waveform, self.quantization_channels)
-            encoded = tf.reshape(encoded, [-1, self.quantization_channels])
+            if self.scalar_input:
+                encoded = tf.reshape(waveform, [-1, 1])
+                encoded = tf.cast(encoded, tf.float32)
+            else:
+                encoded = tf.one_hot(waveform, self.output_channels)
+                encoded = tf.reshape(encoded, [-1, self.output_channels])
             gc_embedding = self._embed_gc(global_condition)
             raw_output = self._create_generator(encoded, gc_embedding)
             if self.scalar_input:
-                out = tf.reshape(raw_output, [self.batch_size, -1, self.quantization_channels])
+                out = tf.reshape(raw_output, [self.batch_size, -1, self.output_channels])
                 last = sample_from_discretized_mix_logistic(out, log_scale_min=-7.0)
             else:
-                out = tf.reshape(raw_output, [-1, self.quantization_channels])
+                out = tf.reshape(raw_output, [-1, self.output_channels])
                 proba = tf.cast(
                     tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
                 last = tf.slice(
                     proba,
                     [tf.shape(proba)[0] - 1, 0],
-                    [1, self.quantization_channels])
+                    [1, self.output_channels])
             return tf.reshape(last, [-1])
 
     def loss(self,
@@ -649,15 +657,17 @@ class WaveNetModel(object):
         with tf.name_scope(name):
             # We mu-law encode and quantize the input audioform.
             encoded_input = mu_law_encode(input_batch,
-                                          self.quantization_channels)
+                                          self.output_channels)
 
             gc_embedding = self._embed_gc(global_condition_batch)
             encoded = self._one_hot(encoded_input)
             if self.scalar_input:
+                print("Raw Audio... loss function")
                 network_input = tf.reshape(
                     tf.cast(input_batch, tf.float32),
                     [self.batch_size, -1, 1])
             else:
+                print("Quantized... los func")
                 network_input = encoded
 
             # Cut off the last sample of network input to preserve causality.
@@ -671,23 +681,21 @@ class WaveNetModel(object):
                 # Cut off the samples corresponding to the receptive field
                 # for the first predicted sample.
                 target_output = tf.slice(
-                    tf.reshape(
-                        encoded,
-                        [self.batch_size, -1, self.quantization_channels]),
+                    network_input,
                     [0, self.receptive_field, 0],
                     [-1, -1, -1])
                 if self.scalar_input:
                     loss = discretized_mix_logistic_loss(raw_output, target_output,
-                                                             num_class=self.quantization_channels,
+                                                             num_classes=self.quantization_channels,
                                                              log_scale_min = -7.0,
                                                              reduce=False)
                     reduced_loss = tf.reduce_mean(loss)
                 else:
 
                     target_output = tf.reshape(target_output,
-                                           [-1, self.quantization_channels])
+                                           [-1, self.output_channels])
                     prediction = tf.reshape(raw_output,
-                                        [-1, self.quantization_channels])
+                                        [-1, self.output_channels])
                     loss = tf.nn.softmax_cross_entropy_with_logits(
                         logits=prediction,
                         labels=target_output)
