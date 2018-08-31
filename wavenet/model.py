@@ -5,6 +5,7 @@ from .ops import causal_conv, mu_law_encode
 from .mixture import discretized_mix_logistic_loss, sample_from_discretized_mix_logistic
 
 def create_variable(name, shape):
+    
     '''Create a convolution filter variable with the specified name and shape,
     and initialize it using Xavier initialition.'''
     initializer = tf.contrib.layers.xavier_initializer_conv2d()
@@ -52,12 +53,12 @@ class WaveNetModel(object):
                  skip_channels,
                  quantization_channels=2**16,
                  output_channels = 3 * 10,
-                 min_log_scale = -7.0,
+                 log_scale_min = -7.0,
                  use_biases=False,
                  scalar_input=False,
                  initial_filter_width=32,
                  histograms=False,
-                 local_conditional_channels = None,
+                 local_condition_channels = None,
                  global_condition_channels=None,
                  global_condition_cardinality=None):
         '''Initializes the WaveNet model.
@@ -103,14 +104,15 @@ class WaveNetModel(object):
         self.filter_width = filter_width
         self.residual_channels = residual_channels
         self.dilation_channels = dilation_channels
-        self.quantization_channels = quantization_channels,
-        self.output_channels = output_channels,
-        self.log_min_scale = log_min_scale,
+        self.quantization_channels = quantization_channels
+        self.output_channels = output_channels
+        self.log_scale_min = log_scale_min
         self.use_biases = use_biases
         self.skip_channels = skip_channels
         self.scalar_input = scalar_input
         self.initial_filter_width = initial_filter_width
         self.histograms = histograms
+        self.local_condition_channels = local_condition_channels
         self.global_condition_channels = global_condition_channels
         self.global_condition_cardinality = global_condition_cardinality
 
@@ -130,6 +132,7 @@ class WaveNetModel(object):
         return receptive_field
 
     def _create_variables(self):
+         
         '''This function creates all variables used by the network.
         This allows us to share them between multiple calls to the loss
         function and generation function.'''
@@ -192,7 +195,7 @@ class WaveNetModel(object):
                             [1,
                              self.dilation_channels,
                              self.skip_channels])
-                        if(self.local_condition_channel is not None):
+                        if(self.local_condition_channels is not None):
                             current['lc_gate_weights'] = create_variables(
                                 'lc_gate',
                                 [1, self.local_condition_channels,
@@ -214,9 +217,9 @@ class WaveNetModel(object):
                                  self.dilation_channels])
 
                         if self.use_biases:
-                            current['filter_bias'] = create_bias_variable(
+                            current['filter_bias'] = tf.cast(create_bias_variable(
                                 'filter_bias',
-                                [self.dilation_channels])
+                                [self.dilation_channels]), tf.float32)
                             current['gate_bias'] = create_bias_variable(
                                 'gate_bias',
                                 [self.dilation_channels])
@@ -418,7 +421,7 @@ class WaveNetModel(object):
         # Pre-process the input with a regular convolution
         current_layer = self._create_causal_layer(current_layer)
 
-        output_width = tf.shape(input_batch)[1] - self.receptive_field + 1
+        output_width = tf.shape(input_batch)[1] - self.receptive_field
 
         # Add all defined dilation layers.
         with tf.name_scope('dilated_stack'):
@@ -600,7 +603,7 @@ class WaveNetModel(object):
 
             if self.scalar_input:
                out = tf.reshape(raw_output, [self.batch_size, -1, self.output_channels])
-               last = sample_from_discretized_mix_logistic(out, log_scale_min = -7.)
+               last = sample_from_discretized_mix_logistic(out, log_scale_min = self.log_scale_min)
             else:
                 out = tf.reshape(raw_output, [-1, self.output_channels])
                 # Cast to float64 to avoid bug in TensorFlow
@@ -634,7 +637,7 @@ class WaveNetModel(object):
             raw_output = self._create_generator(encoded, gc_embedding)
             if self.scalar_input:
                 out = tf.reshape(raw_output, [self.batch_size, -1, self.output_channels])
-                last = sample_from_discretized_mix_logistic(out, log_scale_min=-7.0)
+                last = sample_from_discretized_mix_logistic(out, log_scale_min=self.log_scale_min)
             else:
                 out = tf.reshape(raw_output, [-1, self.output_channels])
                 proba = tf.cast(
@@ -662,12 +665,13 @@ class WaveNetModel(object):
             gc_embedding = self._embed_gc(global_condition_batch)
             encoded = self._one_hot(encoded_input)
             if self.scalar_input:
-                print("Raw Audio... loss function")
+               
                 network_input = tf.reshape(
                     tf.cast(input_batch, tf.float32),
                     [self.batch_size, -1, 1])
+                
             else:
-                print("Quantized... los func")
+                
                 network_input = encoded
 
             # Cut off the last sample of network input to preserve causality.
@@ -676,7 +680,7 @@ class WaveNetModel(object):
                                      [-1, network_input_width, -1])
 
             raw_output = self._create_network(network_input, gc_embedding)
-
+           
             with tf.name_scope('loss'):
                 # Cut off the samples corresponding to the receptive field
                 # for the first predicted sample.
@@ -684,12 +688,15 @@ class WaveNetModel(object):
                     network_input,
                     [0, self.receptive_field, 0],
                     [-1, -1, -1])
+               
                 if self.scalar_input:
+                   
                     loss = discretized_mix_logistic_loss(raw_output, target_output,
                                                              num_classes=self.quantization_channels,
-                                                             log_scale_min = -7.0,
+                                                             log_scale_min = self.log_scale_min,
                                                              reduce=False)
                     reduced_loss = tf.reduce_mean(loss)
+                   
                 else:
 
                     target_output = tf.reshape(target_output,

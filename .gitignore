@@ -1,4 +1,7 @@
 logdir/
 VCTK-Corpus/
+dataset/
+*.log
+*.txt
 *.pyc
 

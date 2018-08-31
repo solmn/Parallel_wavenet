@@ -20,16 +20,16 @@ from tensorflow.python.client import timeline
 from wavenet import WaveNetModel, AudioReader, optimizer_factory
 
 BATCH_SIZE = 1
-DATA_DIRECTORY = './VCTK-Corpus'
+DATA_DIRECTORY = './dataset/LJSpeech/wavs/'
 LOGDIR_ROOT = './logdir'
-CHECKPOINT_EVERY = 50
-NUM_STEPS = int(1e5)
-LEARNING_RATE = 1e-3
+CHECKPOINT_EVERY = 300
+NUM_STEPS = int(1e4)
+LEARNING_RATE = 1e-4
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
-SAMPLE_SIZE = 100000
+SAMPLE_SIZE = 10000
 L2_REGULARIZATION_STRENGTH = 0
-SILENCE_THRESHOLD = 0.3
+SILENCE_THRESHOLD = 0.1
 EPSILON = 0.001
 MOMENTUM = 0.9
 MAX_TO_KEEP = 5
@@ -100,6 +100,8 @@ def get_arguments():
                         help='Whether to store histogram summaries. Default: False')
     parser.add_argument('--gc_channels', type=int, default=None,
                         help='Number of global condition channels. Default: None. Expecting: Int')
+    parser.add_argument('--lc_channels', type=int, default=None,
+                        help='Number of local condition channels. Default: None. Expecting: Int')
     parser.add_argument('--max_checkpoints', type=int, default=MAX_TO_KEEP,
                         help='Maximum amount of checkpoints that will be kept alive. Default: '
                              + str(MAX_TO_KEEP) + '.')
@@ -207,7 +209,6 @@ def main():
 
     # Create coordinator.
     coord = tf.train.Coordinator()
-
     # Load raw waveform from VCTK corpus.
     with tf.name_scope('create_inputs'):
         # Allow silence trimming to be skipped by specifying a threshold near
@@ -241,15 +242,19 @@ def main():
         dilation_channels=wavenet_params["dilation_channels"],
         skip_channels=wavenet_params["skip_channels"],
         quantization_channels=wavenet_params["quantization_channels"],
+        output_channels = wavenet_params["output_channels"],
+        log_scale_min = wavenet_params["log_scale_min"],
         use_biases=wavenet_params["use_biases"],
         scalar_input=wavenet_params["scalar_input"],
         initial_filter_width=wavenet_params["initial_filter_width"],
         histograms=args.histograms,
+        local_condition_channels = args.lc_channels,
         global_condition_channels=args.gc_channels,
         global_condition_cardinality=reader.gc_category_cardinality)
 
     if args.l2_regularization_strength == 0:
         args.l2_regularization_strength = None
+  
     loss = net.loss(input_batch=audio_batch,
                     global_condition_batch=gc_id_batch,
                     l2_regularization_strength=args.l2_regularization_strength)
@@ -311,7 +316,9 @@ def main():
                 with open(timeline_path, 'w') as f:
                     f.write(tl.generate_chrome_trace_format(show_memory=True))
             else:
+               
                 summary, loss_value, _ = sess.run([summaries, loss, optim])
+                
                 writer.add_summary(summary, step)
 
             duration = time.time() - start_time

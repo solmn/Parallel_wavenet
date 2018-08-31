@@ -142,7 +142,7 @@ class AudioReader(object):
                   self.gc_category_cardinality))
         else:
             self.gc_category_cardinality = None
-
+        
     def dequeue(self, num_elements):
         output = self.queue.dequeue_many(num_elements)
         return output
@@ -156,6 +156,7 @@ class AudioReader(object):
         while not stop:
             iterator = load_generic_audio(self.audio_dir, self.sample_rate)
             for audio, filename, category_id in iterator:
+               
                 if self.coord.should_stop():
                     stop = True
                     break

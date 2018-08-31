@@ -13,7 +13,7 @@ def log_sum_exp(x):
     """
     axis = len(x.get_shape()) - 1
     m = tf.reduce_max(x, axis)
-    m2 = tf.reduce_max(x, axis, keep_dims = True)
+    m2 = tf.reduce_max(x, axis, keepdims = True)
     return m + tf.log(tf.reduce_sum(tf.exp(x - m2),axis))
 
 def log_prob_from_logits(x):
@@ -21,8 +21,8 @@ def log_prob_from_logits(x):
         Numerically stable log_softmax implementation that prevents overflow
     """
     axis = len(x.get_shape()) - 1
-    m = tf.reduce_max(x, axis, keep_dims = True)
-    return x - m - tf.log(tf.reduce_sum(tf.exp(x -m), axis, keep_dims = True))
+    m = tf.reduce_max(x, axis, keepdims = True)
+    return x - m - tf.log(tf.reduce_sum(tf.exp(x -m), axis, keepdims = True))
 
 def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -7.0, reduce = True):
     """
@@ -39,13 +39,13 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -
         Returns:
             Tensor: loss
     """
+    print(y_hat, y)
    
-
     # Shapes
-    y_shape = int_shape(y)
-    y_hat_shape = int_shape(y_hat) 
+    y_shape = tf.shape(y)
+    y_hat_shape = tf.shape(y_hat) 
 
-     nr_mix = y_hat_shape[2] // 3
+    nr_mix = y_hat_shape[2] // 3
     
     # unpaccking parameters of mixture distribution
     # (B, T, nr_mix) x 3
@@ -65,7 +65,7 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -
     plus_in = inv_stdv *  (centered_y + 1. / (num_classes - 1))
     cdf_plus = tf.nn.sigmoid(plus_in)
 
-    min_in = inv_stdv * (centered_Y - 1. / (num_classes - 1))
+    min_in = inv_stdv * (centered_y - 1. / (num_classes - 1))
     cdf_min = tf.nn.sigmoid(min_in)
 
     # log probablity for edge case of 0 (before scaling)
@@ -85,10 +85,10 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -
     log_pdf_min = mid_in - log_scales - 2. * tf.nn.softplus(mid_in)
 
     log_probs = tf.where(y < -0.999 , log_cdf_plus,
-                         tf.where(x > 0.999 , log_one_minus_cdf_min,
+                         tf.where(y > 0.999 , log_one_minus_cdf_min,
                                   tf.where(cdf_delta > 1e-5, 
                                            tf.log(tf.maximum(cdf_delta, 1e-12)),
-                                           log_pdf_mid - np.log((num_classes - 1)  / 2))))
+                                           log_pdf_min - np.log((num_classes - 1)  / 2))))
 
     log_probs = log_probs + log_prob_from_logits(logit_probs)  # [B, T, nr_mix]
     final_log = log_sum_exp(log_probs)  # [B, T]
@@ -125,7 +125,7 @@ def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0):
     u = tf.random_uniform(means.get_shape(), minval=1e-5, maxval=1. - 1e-5)
     x = means + tf.exp(log_scales) * (tf.log(u) - tf.log(1. - u))  # inverse of sigmoid, [B, T]
     # x = tf.clip_by_value(x, -0.9999999, 0.9999999)  # ITU-Ts it necessary?
-    x = = tf.minimum(tf.maximum(x, -1.), 1.)
+    x =  tf.minimum(tf.maximum(x, -1.), 1.)
 
     # negative log-likelihood
     z = (x - means) * tf.exp(-log_scales)  # z = (x - u) / S
