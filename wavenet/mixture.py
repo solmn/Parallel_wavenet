@@ -94,7 +94,7 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -
     final_log = log_sum_exp(log_probs)  # [B, T]
 
     return -tf.reduce_mean(final_log)  # negative log-likelihood
-def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0, nr_mix = 10):
+def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0):
     """
         Sample from discretized mixture of logistic distributions
 
@@ -102,8 +102,10 @@ def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0, nr_mix = 10):
             y(Tensor): B x T x C
             log_scale (float): log scale minimum value
     """
-    
-   logit_probs = y[:, :, :nr_mix]  # [B, T, nr_mix]
+    y_shape = int_shape(y)
+   
+    nr_mix = y_hat_shape[2] // 3
+    logit_probs = y[:, :, :nr_mix]  # [B, T, nr_mix]
     # sample mixture indicator from softmax
     sel = tf.one_hot(  # [B, T, nr_mix]
         tf.argmax(  # [B, T]
@@ -124,9 +126,9 @@ def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0, nr_mix = 10):
     x = means + tf.exp(log_scales) * (tf.log(u) - tf.log(1. - u))  # inverse of sigmoid, [B, T]
     # x = tf.clip_by_value(x, -0.9999999, 0.9999999)  # ITU-Ts it necessary?
     x = = tf.minimum(tf.maximum(x, -1.), 1.)
-    
+
     # negative log-likelihood
     z = (x - means) * tf.exp(-log_scales)  # z = (x - u) / S
     log_likelihood = z - log_scales - 2. * tf.nn.softplus(z)
-    return x, log_likelihood
+    return x
 

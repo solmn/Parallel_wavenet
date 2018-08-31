@@ -593,14 +593,19 @@ class WaveNetModel(object):
 
             gc_embedding = self._embed_gc(global_condition)
             raw_output = self._create_network(encoded, gc_embedding)
-            out = tf.reshape(raw_output, [-1, self.quantization_channels])
-            # Cast to float64 to avoid bug in TensorFlow
-            proba = tf.cast(
-                tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
-            last = tf.slice(
-                proba,
-                [tf.shape(proba)[0] - 1, 0],
-                [1, self.quantization_channels])
+
+            if self.scalar_input:
+               out = tf.reshape(raw_output, [self.batch_size, -1, self.quantization_channels])
+               last = sample_from_discretized_mix_logistic(out, log_scale_min = -7.)
+            else:
+                out = tf.reshape(raw_output, [-1, self.quantization_channels])
+                # Cast to float64 to avoid bug in TensorFlow
+                proba = tf.cast(
+                    tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
+                last = tf.slice(
+                    proba,
+                    [tf.shape(proba)[0] - 1, 0],
+                    [1, self.quantization_channels])
             return tf.reshape(last, [-1])
 
     def predict_proba_incremental(self, waveform, global_condition=None,
@@ -619,13 +624,17 @@ class WaveNetModel(object):
             encoded = tf.reshape(encoded, [-1, self.quantization_channels])
             gc_embedding = self._embed_gc(global_condition)
             raw_output = self._create_generator(encoded, gc_embedding)
-            out = tf.reshape(raw_output, [-1, self.quantization_channels])
-            proba = tf.cast(
-                tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
-            last = tf.slice(
-                proba,
-                [tf.shape(proba)[0] - 1, 0],
-                [1, self.quantization_channels])
+            if self.scalar_input:
+                out = tf.reshape(raw_output, [self.batch_size, -1, self.quantization_channels])
+                last = sample_from_discretized_mix_logistic(out, log_scale_min=-7.0)
+            else:
+                out = tf.reshape(raw_output, [-1, self.quantization_channels])
+                proba = tf.cast(
+                    tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
+                last = tf.slice(
+                    proba,
+                    [tf.shape(proba)[0] - 1, 0],
+                    [1, self.quantization_channels])
             return tf.reshape(last, [-1])
 
     def loss(self,
