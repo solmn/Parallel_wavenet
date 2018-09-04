@@ -24,7 +24,7 @@ def log_prob_from_logits(x):
     m = tf.reduce_max(x, axis, keepdims = True)
     return x - m - tf.log(tf.reduce_sum(tf.exp(x -m), axis, keepdims = True))
 
-def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -7.0, reduce = True):
+def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -7.0, reduce = False):
     """
         Discretized mixture of logistic distributions loss
         Note: Assumed that the input is scaled to [-1, 1].
@@ -39,7 +39,7 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -
         Returns:
             Tensor: loss
     """
-    print(y_hat, y)
+    
    
     # Shapes
     y_shape = tf.shape(y)
@@ -92,8 +92,12 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 256, log_scale_min = -
 
     log_probs = log_probs + log_prob_from_logits(logit_probs)  # [B, T, nr_mix]
     final_log = log_sum_exp(log_probs)  # [B, T]
-
-    return -tf.reduce_mean(final_log)  # negative log-likelihood
+    # log_probs = tf.reduce_sum(log_probs, axis=-1, keep_dims=True) + tf.nn.log_softmax(logit_probs, -1)
+    # if reduce:
+    #     return -tf.reduce_sum(log_sum_exp(log_probs))
+    # else:
+    #     return - log_sum_exp(log_probs) 
+    return - final_log
 def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0):
     """
         Sample from discretized mixture of logistic distributions
@@ -102,6 +106,7 @@ def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0):
             y(Tensor): B x T x C
             log_scale (float): log scale minimum value
     """
+    log_scale_min = float(np.log(1e-14))
     y_shape = int_shape(y)
    
     nr_mix = y_hat_shape[2] // 3
