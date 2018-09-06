@@ -421,7 +421,7 @@ class WaveNetModel(object):
         # Pre-process the input with a regular convolution
         current_layer = self._create_causal_layer(current_layer)
 
-        output_width = tf.shape(input_batch)[1] - self.receptive_field
+        output_width = tf.shape(input_batch)[1] - self.receptive_field 
 
         # Add all defined dilation layers.
         with tf.name_scope('dilated_stack'):
@@ -671,8 +671,7 @@ class WaveNetModel(object):
                     [self.batch_size, -1, 1])
                 
             else:
-                
-                network_input = encoded
+                 network_input = encoded
 
             # Cut off the last sample of network input to preserve causality.
             network_input_width = tf.shape(network_input)[1] - 1

@@ -19,23 +19,28 @@ from tensorflow.python.client import timeline
 
 from wavenet import WaveNetModel, AudioReader, optimizer_factory
 
-BATCH_SIZE = 1
-DATA_DIRECTORY = './dataset/LJSpeech/wavs/'
+BATCH_SIZE = 2
+DATA_DIRECTORY = './dataset/VCTK-Corpus/wav48/'
 LOGDIR_ROOT = './logdir'
 CHECKPOINT_EVERY = 50
-NUM_STEPS = int(1e3)
-LEARNING_RATE = 1e-3
+NUM_STEPS = int(1e6)
+LEARNING_RATE = 1e-6
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
-SAMPLE_SIZE = 10000
-L2_REGULARIZATION_STRENGTH = 1
-SILENCE_THRESHOLD = 0.07
-EPSILON = 1e-8
-MOMENTUM = 0.9
+SAMPLE_SIZE = 15000
+L2_REGULARIZATION_STRENGTH = 0
+SILENCE_THRESHOLD = 0.1
+EPSILON = 1e-6
+MOMENTUM = 0.7
 MAX_TO_KEEP = 5
 METADATA = False
 
+initial_learning_rate=1e-5
+max_num_step=int(1e6)
 
+MOVING_AVERAGE_DECAY=0.9999
+LEARNING_RATE_DECAY_FACTOR=0.5
+NUM_STEPS_RATIO_PER_DECAY=0.4
 def get_arguments():
     def _str_to_bool(s):
         """Convert string to bool (in argparse context)."""
@@ -122,7 +127,7 @@ def save(saver, sess, logdir, step):
 
 
 def load(saver, sess, logdir):
-    logdir = "logdir/train/2018-09-03T17-31-28/"
+    # logdir = "logdir/train/2018-09-04T18-53-23/"
     print("Trying to restore saved checkpoints from {} ...".format(logdir),
           end="")
 
@@ -255,16 +260,25 @@ def main():
 
     if args.l2_regularization_strength == 0:
         args.l2_regularization_strength = None
-    
+    global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
+    decay_steps = NUM_STEPS_RATIO_PER_DECAY * max_num_step
+    lr = tf.train.exponential_decay(initial_learning_rate,
+                                    global_step,
+                                    decay_steps,
+                                    LEARNING_RATE_DECAY_FACTOR,
+                                    staircase=True)
     loss = net.loss(input_batch=audio_batch,
                     global_condition_batch=gc_id_batch,
                     l2_regularization_strength=args.l2_regularization_strength)
     optimizer = optimizer_factory[args.optimizer](
-                    learning_rate=args.learning_rate,
-                    momentum=args.momentum)
+                    learning_rate=lr,
+                    momentum=None)
     trainable = tf.trainable_variables()
-    optim = optimizer.minimize(loss, var_list=trainable)
-
+    
+    optim = optimizer.minimize(loss, var_list=trainable, global_step=global_step)
+    ema = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
+    maintain_averages_op = tf.group(ema.apply(trainable))
+    train_op = tf.group(optim, maintain_averages_op)
     # Set up logging for TensorBoard.
     writer = tf.summary.FileWriter(logdir)
     writer.add_graph(tf.get_default_graph())
@@ -298,7 +312,7 @@ def main():
     step = None
     last_saved_step = saved_global_step
     try:
-        for step in range(saved_global_step + 1, args.num_steps):
+        for step in range(saved_global_step + 1, max_num_step):
             start_time = time.time()
             if args.store_metadata and step % 50 == 0:
                 # Slow run that stores extra information for debugging.
@@ -321,7 +335,7 @@ def main():
                 summary, loss_value, _ = sess.run([summaries, loss, optim])
                 
                 writer.add_summary(summary, step)
-
+         
             duration = time.time() - start_time
             print('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'
                   .format(step, loss_value, duration))
