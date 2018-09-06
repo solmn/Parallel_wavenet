@@ -1,14 +1,14 @@
 {
     "filter_width": 3,
-    "sample_rate": 16000,
+    "sample_rate": 24000,
     "dilations": [1, 2, 4, 8, 16, 32, 64, 128, 256,512, 
                   1, 2, 4, 8, 16, 32, 64, 128, 256,512,
-                  1, 2, 4, 8, 16, 32, 64, 128, 256,512,
-                  1, 2, 4, 8, 16, 32, 64, 128, 256,512
+                  1, 2, 4, 8, 16, 32, 64, 128, 256, 512
                   ],
+
     
-    "residual_channels": 64,
-    "dilation_channels": 64,
+    "residual_channels": 512,
+    "dilation_channels": 512,
     "quantization_channels": 65536,
     "output_channels": 30,
     "skip_channels": 256,
