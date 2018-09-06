@@ -176,7 +176,7 @@ class AudioReader(object):
                 if self.sample_size:
                     # Cut samples into pieces of size receptive_field +
                     # sample_size with receptive_field overlap
-                    print(self.receptive_field, self.sample_size, "hhhhhhhhhhhhhhhhhhhhhhh")
+                   
                     while len(audio) > self.receptive_field:
                         piece = audio[:(self.receptive_field +
                                         self.sample_size), :]
