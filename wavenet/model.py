@@ -595,9 +595,10 @@ class WaveNetModel(object):
             if self.scalar_input:
                 encoded = tf.cast(waveform, tf.float32)
                 encoded = tf.reshape(encoded, [-1, 1])
+                print(encoded)
             else:
                 encoded = self._one_hot(waveform)
-
+           
             gc_embedding = self._embed_gc(global_condition)
             raw_output = self._create_network(encoded, gc_embedding)
 

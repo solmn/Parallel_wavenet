@@ -12,9 +12,9 @@ import tensorflow as tf
 
 from wavenet import WaveNetModel, mu_law_decode, mu_law_encode, audio_reader
 
-SAMPLES = 16000
+SAMPLES = 24000
 TEMPERATURE = 1.0
-LOGDIR = './logdir'
+LOGDIR = './logdir/train/2018-10-05T10-29-39/'
 WAVENET_PARAMS = './wavenet_params.json'
 SAVE_EVERY = None
 SILENCE_THRESHOLD = 0.1
@@ -72,7 +72,7 @@ def get_arguments():
     parser.add_argument(
         '--fast_generation',
         type=_str_to_bool,
-        default=True,
+        default=False,
         help='Use fast generation')
     parser.add_argument(
         '--wav_seed',
@@ -148,6 +148,8 @@ def main():
         residual_channels=wavenet_params['residual_channels'],
         dilation_channels=wavenet_params['dilation_channels'],
         quantization_channels=wavenet_params['quantization_channels'],
+        output_channels = wavenet_params["output_channels"],
+        log_scale_min = wavenet_params["log_scale_min"],
         skip_channels=wavenet_params['skip_channels'],
         use_biases=wavenet_params['use_biases'],
         scalar_input=wavenet_params['scalar_input'],

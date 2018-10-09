@@ -21,14 +21,14 @@ from wavenet import WaveNetModel, AudioReader, optimizer_factory
 BATCH_SIZE = 1
 DATA_DIRECTORY = './dataset/LJSpeech/wavs/'
 LOGDIR_ROOT = './logdir'
-CHECKPOINT_EVERY = 50
+CHECKPOINT_EVERY = 5
 NUM_STEPS = int(1e6)
 LEARNING_RATE = 2 * 1e-5
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SAMPLE_SIZE = 8000
 L2_REGULARIZATION_STRENGTH = 0
-SILENCE_THRESHOLD = 0.07
+SILENCE_THRESHOLD = 0.1
 EPSILON = 1e-8
 MOMENTUM = 0.9
 MAX_TO_KEEP = 5
@@ -121,7 +121,7 @@ def save(saver, sess, logdir, step):
 
 
 def load(saver, sess, logdir):
-    logdir = "logdir/train/2018-09-03T17-31-28/"
+    logdir = "logdir/train/2018-09-07T19-20-47/"
     print("Trying to restore saved checkpoints from {} ...".format(logdir),
           end="")
 
