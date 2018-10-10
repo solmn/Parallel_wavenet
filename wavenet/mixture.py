@@ -98,7 +98,8 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes = 2**16, log_scale_min =
     else:
         return - final_log 
 
-def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0):
+def sample_from_discretized_mix_logistic(y, log_scale_min = -32.23619130191664):
+    
     """
         Sample from discretized mixture of logistic distributions
         Args:
@@ -106,17 +107,23 @@ def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0):
             log_scale (float): log scale minimum value
     """
     log_scale_min = float(np.log(1e-14))
-    y_shape = int_shape(y)
+    y_shape = y.get_shape().as_list()
    
-    nr_mix = y_hat_shape[2] // 3
+    nr_mix = y_shape[2] // 3
     logit_probs = y[:, :, :nr_mix]  # [B, T, nr_mix]
+    # a = tf.random_uniform(tf.shape(logit_probs), minval=1e-5, maxval=1. - 1e-5)
+    # print(a)
     # sample mixture indicator from softmax
-    sel = tf.one_hot(  # [B, T, nr_mix]
-        tf.argmax(  # [B, T]
-            logit_probs - tf.log(-tf.log(  # [B, T, nr_mix]
-                tf.random_uniform(logit_probs.get_shape(), minval=1e-5, maxval=1. - 1e-5))),
-            2),
-        depth=nr_mix, dtype=tf.float32)
+    temp = tf.random_uniform(tf.shape(logit_probs), minval=1e-5, maxval=1. - 1e-5)
+    temp = logit_probs - tf.log(-tf.log(temp))
+    argmax = tf.argmax(temp, 2)
+    sel = tf.one_hot(argmax,depth=nr_mix, dtype=tf.float32 )
+    # sel = tf.one_hot(
+    #     tf.argmax(
+    #         logit_probs - tf.log(-tf.log(
+    #             tf.random_uniform(
+    #                 tf.shape(logit_probs), minval=1e-5, maxval=1. - 1e-5))), 2),
+    #     depth=nr_mix, dtype=tf.float32)
 
     # select logistic parameters
     means = tf.reduce_sum(y[:, :, nr_mix: 2 * nr_mix] * sel, 2)
@@ -126,12 +133,12 @@ def sample_from_discretized_mix_logistic(y, log_scale_min = -7.0):
 
     # sample from logistic & clip to interval
     # we don't actually round to the nearest 8bit value when sampling
-    u = tf.random_uniform(means.get_shape(), minval=1e-5, maxval=1. - 1e-5)
+    u = tf.random_uniform(tf.shape(means), minval=1e-5, maxval=1. - 1e-5)
     x = means + tf.exp(log_scales) * (tf.log(u) - tf.log(1. - u))  # inverse of sigmoid, [B, T]
-    # x = tf.clip_by_value(x, -0.9999999, 0.9999999)  # ITU-Ts it necessary?
+    x = tf.clip_by_value(x, -0.9999999, 0.9999999)  # ITU-Ts it necessary?
     x =  tf.minimum(tf.maximum(x, -1.), 1.)
-
+    
     # negative log-likelihood
-    z = (x - means) * tf.exp(-log_scales)  # z = (x - u) / S
-    log_likelihood = z - log_scales - 2. * tf.nn.softplus(z)
+    # z = (x - means) * tf.exp(-log_scales)  # z = (x - u) / S
+    # log_likelihood = z - log_scales - 2. * tf.nn.softplus(z)
     return x

@@ -157,13 +157,14 @@ def main():
         global_condition_channels=args.gc_channels,
         global_condition_cardinality=args.gc_cardinality)
 
-    samples = tf.placeholder(tf.int32)
+    samples = tf.placeholder(tf.int32, name="samples")
+    sess.run(tf.global_variables_initializer())
 
     if args.fast_generation:
         next_sample = net.predict_proba_incremental(samples, args.gc_id)
     else:
         next_sample = net.predict_proba(samples, args.gc_id)
-
+  
     if args.fast_generation:
         sess.run(tf.global_variables_initializer())
         sess.run(net.init_ops)
@@ -175,7 +176,7 @@ def main():
 
     print('Restoring model from {}'.format(args.checkpoint))
     saver.restore(sess, args.checkpoint)
-
+    print("Done Restoring the model")
     decode = mu_law_decode(samples, wavenet_params['quantization_channels'])
 
     quantization_channels = wavenet_params['quantization_channels']
@@ -186,10 +187,14 @@ def main():
                            net.receptive_field)
         waveform = sess.run(seed).tolist()
     else:
-        # Silence with a single random sample at the end.
-        waveform = [quantization_channels / 2] * (net.receptive_field - 1)
-        waveform.append(np.random.randint(quantization_channels))
-
+        if wavenet_params['scalar_input']:
+            waveform = [0] * (net.receptive_field)
+            waveform.append(0)
+        else:
+            # Silence with a single random sample at the end.
+            waveform = [quantization_channels / 2] * (net.receptive_field - 1)
+            waveform.append(np.random.randint(quantization_channels))
+        
     if args.fast_generation and args.wav_seed:
         # When using the incremental generation, we need to
         # feed in all priming samples one by one before starting the
@@ -219,45 +224,50 @@ def main():
             else:
                 window = waveform
             outputs = [next_sample]
-
+       
         # Run the WaveNet to predict the next sample.
+        # print(window.shape)
+        # print(window)
         prediction = sess.run(outputs, feed_dict={samples: window})[0]
-
         # Scale prediction distribution using temperature.
-        np.seterr(divide='ignore')
-        scaled_prediction = np.log(prediction) / args.temperature
-        scaled_prediction = (scaled_prediction -
+        if wavenet_params['scalar_input']:
+            waveform.append(prediction[-1])
+            print(step, prediction)
+        else:
+            np.seterr(divide='ignore')
+            scaled_prediction = np.log(prediction) / args.temperature
+            scaled_prediction = (scaled_prediction -
                              np.logaddexp.reduce(scaled_prediction))
-        scaled_prediction = np.exp(scaled_prediction)
-        np.seterr(divide='warn')
+            scaled_prediction = np.exp(scaled_prediction)
+            np.seterr(divide='warn')
 
-        # Prediction distribution at temperature=1.0 should be unchanged after
-        # scaling.
-        if args.temperature == 1.0:
-            np.testing.assert_allclose(
-                    prediction, scaled_prediction, atol=1e-5,
-                    err_msg='Prediction scaling at temperature=1.0 '
-                            'is not working as intended.')
+            # Prediction distribution at temperature=1.0 should be unchanged after
+            # scaling.
+            if args.temperature == 1.0:
+                np.testing.assert_allclose(
+                        prediction, scaled_prediction, atol=1e-5,
+                        err_msg='Prediction scaling at temperature=1.0 '
+                                'is not working as intended.')
 
-        sample = np.random.choice(
-            np.arange(quantization_channels), p=scaled_prediction)
-        waveform.append(sample)
+            sample = np.random.choice(
+                np.arange(quantization_channels), p=scaled_prediction)
+            waveform.append(sample)
 
         # Show progress only once per second.
         current_sample_timestamp = datetime.now()
         time_since_print = current_sample_timestamp - last_sample_timestamp
         if time_since_print.total_seconds() > 1.:
             print('Sample {:3<d}/{:3<d}'.format(step + 1, args.samples),
-                  end='\r')
+                    end='\r')
             last_sample_timestamp = current_sample_timestamp
 
-        # If we have partial writing, save the result so far.
-        if (args.wav_out_path and args.save_every and
-                (step + 1) % args.save_every == 0):
-            out = sess.run(decode, feed_dict={samples: waveform})
-            write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
+            # If we have partial writing, save the result so far.
+            if (args.wav_out_path and args.save_every and
+                    (step + 1) % args.save_every == 0):
+                out = sess.run(decode, feed_dict={samples: waveform})
+                write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
 
-    # Introduce a newline to clear the carriage return from the progress.
+        # Introduce a newline to clear the carriage return from the progress.
     print()
 
     # Save the result as an audio summary.
@@ -271,7 +281,10 @@ def main():
 
     # Save the result as a wav file.
     if args.wav_out_path:
-        out = sess.run(decode, feed_dict={samples: waveform})
+        if wavenet_params['scalar_input']:
+            out = waveform
+        else:
+            out = sess.run(decode, feed_dict={samples: waveform})
         write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
 
     print('Finished generating. The result can be viewed in TensorBoard.')

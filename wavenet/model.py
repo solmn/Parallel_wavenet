@@ -417,12 +417,10 @@ class WaveNetModel(object):
         '''Construct the WaveNet network.'''
         outputs = []
         current_layer = input_batch
-
         # Pre-process the input with a regular convolution
         current_layer = self._create_causal_layer(current_layer)
-
-        output_width = tf.shape(input_batch)[1] - self.receptive_field 
-
+        output_width = tf.shape(input_batch)[1] - self.receptive_field + 1
+       
         # Add all defined dilation layers.
         with tf.name_scope('dilated_stack'):
             for layer_index, dilation in enumerate(self.dilations):
@@ -468,13 +466,13 @@ class WaveNetModel(object):
         push_ops = []
         outputs = []
         current_layer = input_batch
-
+        channels = self.quantization_channels if not self.scalar_input else self.output_channels
         q = tf.FIFOQueue(
             1,
             dtypes=tf.float32,
-            shapes=(self.batch_size, self.output_channels))
+            shapes=(self.batch_size, channels))
         init = q.enqueue_many(
-            tf.zeros((1, self.batch_size, self.output_channels)))
+            tf.zeros((1, self.batch_size, channels)))
 
         current_state = q.dequeue()
         push = q.enqueue([current_layer])
@@ -594,14 +592,12 @@ class WaveNetModel(object):
         with tf.name_scope(name):
             if self.scalar_input:
                 encoded = tf.cast(waveform, tf.float32)
-                encoded = tf.reshape(encoded, [-1, 1])
-                print(encoded)
+                encoded = tf.reshape(encoded, [self.batch_size,-1, 1])
             else:
                 encoded = self._one_hot(waveform)
            
             gc_embedding = self._embed_gc(global_condition)
             raw_output = self._create_network(encoded, gc_embedding)
-
             if self.scalar_input:
                out = tf.reshape(raw_output, [self.batch_size, -1, self.output_channels])
                last = sample_from_discretized_mix_logistic(out, log_scale_min = self.log_scale_min)
