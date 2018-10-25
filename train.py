@@ -121,7 +121,7 @@ def save(saver, sess, logdir, step):
 
 
 def load(saver, sess, logdir):
-    logdir = "logdir/train/2018-09-07T19-20-47/"
+    # logdir = "logdir/train/2018-09-07T19-20-47/"
     print("Trying to restore saved checkpoints from {} ...".format(logdir),
           end="")
 
@@ -274,7 +274,7 @@ def main():
     sess = tf.Session(config=tf.ConfigProto(log_device_placement=False))
     init = tf.global_variables_initializer()
     sess.run(init)
-
+    
     # Saver for storing checkpoints of the model.
     saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=args.max_checkpoints)
 

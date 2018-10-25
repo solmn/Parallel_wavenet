@@ -644,7 +644,7 @@ class WaveNetModel(object):
                     [tf.shape(proba)[0] - 1, 0],
                     [1, self.output_channels])
             return tf.reshape(last, [-1])
-
+   
     def loss(self,
              input_batch,
              global_condition_batch=None,
@@ -672,10 +672,10 @@ class WaveNetModel(object):
 
             # Cut off the last sample of network input to preserve causality.
             network_input_width = tf.shape(network_input)[1] - 1
-            network_input = tf.slice(network_input, [0, 0, 0],
+            final_network_input = tf.slice(network_input, [0, 0, 0],
                                      [-1, network_input_width, -1])
-
-            raw_output = self._create_network(network_input, gc_embedding)
+        
+            raw_output = self._create_network(final_network_input, gc_embedding)
            
             with tf.name_scope('loss'):
                 # Cut off the samples corresponding to the receptive field
@@ -691,6 +691,7 @@ class WaveNetModel(object):
                                                              num_classes=self.quantization_channels,
                                                              log_scale_min = self.log_scale_min,
                                                              reduce=False)
+                    
                     reduced_loss = tf.reduce_mean(loss)
                    
                 else:
