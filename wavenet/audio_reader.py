@@ -169,7 +169,7 @@ class AudioReader(object):
                               "silence. Consider decreasing trim_silence "
                               "threshold, or adjust volume of the audio."
                               .format(filename))
-
+                audio = audio / np.abs(audio).max() * 0.999
                 audio = np.pad(audio, [[self.receptive_field, 0], [0, 0]],
                                'constant')
 

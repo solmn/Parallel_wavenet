@@ -15,6 +15,7 @@
     "use_biases": true,
     "scalar_input": true,
     "input_type":"raw",
+    "rescaling":true,
     "log_scale_min":-32.23619130191664,
     "initial_filter_width": 32
 }

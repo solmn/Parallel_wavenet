@@ -21,9 +21,9 @@ from wavenet import WaveNetModel, AudioReader, optimizer_factory
 BATCH_SIZE = 1
 DATA_DIRECTORY = './dataset/LJSpeech/wavs/'
 LOGDIR_ROOT = './logdir'
-CHECKPOINT_EVERY = 5
+CHECKPOINT_EVERY = 200
 NUM_STEPS = int(1e6)
-LEARNING_RATE = 2 * 1e-5
+LEARNING_RATE =  1e-5
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SAMPLE_SIZE = 8000

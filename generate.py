@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from wavenet import WaveNetModel, mu_law_decode, mu_law_encode, audio_reader
 
-SAMPLES = 24000
+SAMPLES = 16000
 TEMPERATURE = 1.0
 LOGDIR = './logdir/train/2018-10-05T10-29-39/'
 WAVENET_PARAMS = './wavenet_params.json'
@@ -112,6 +112,7 @@ def get_arguments():
 
 def write_wav(waveform, sample_rate, filename):
     y = np.array(waveform)
+    y = y / np.abs(y).max() * 0.999
     librosa.output.write_wav(filename, y, sample_rate)
     print('Updated wav file at {}'.format(filename))
 
@@ -189,7 +190,7 @@ def main():
     else:
         if wavenet_params['scalar_input']:
             waveform = [0] * (net.receptive_field)
-            waveform.append(0)
+            
         else:
             # Silence with a single random sample at the end.
             waveform = [quantization_channels / 2] * (net.receptive_field - 1)
@@ -285,6 +286,7 @@ def main():
             out = waveform
         else:
             out = sess.run(decode, feed_dict={samples: waveform})
+        out = out[net.receptive_field:]
         write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
 
     print('Finished generating. The result can be viewed in TensorBoard.')

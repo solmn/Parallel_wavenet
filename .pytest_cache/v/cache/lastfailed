@@ -1,0 +1,10 @@
+{
+  "test/test_generation.py::TestGeneration::testCompareSimpleFast": true, 
+  "test/test_generation.py::TestGeneration::testGenerateFast": true, 
+  "test/test_generation.py::TestGeneration::testGenerateSimple": true, 
+  "test/test_generation.py::TestGenerationBiases::testCompareSimpleFast": true, 
+  "test/test_generation.py::TestGenerationBiases::testGenerateFast": true, 
+  "test/test_generation.py::TestGenerationBiases::testGenerateSimple": true, 
+  "test/test_mixture.py::test_mixture_loss": true, 
+  "test/test_model.py::TestNetWithRMSProp::testEndToEndTraining": true
+}

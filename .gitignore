@@ -5,4 +5,5 @@ dataset/
 *.txt
 *.pyc
 *.wav
+*.pytest
 
