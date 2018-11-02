@@ -23,7 +23,7 @@ DATA_DIRECTORY = './dataset/LJSpeech/wavs/'
 LOGDIR_ROOT = './logdir'
 CHECKPOINT_EVERY = 100
 NUM_STEPS = int(1e6)
-LEARNING_RATE =  1e-4
+LEARNING_RATE = 2 * 1e-5
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
 SAMPLE_SIZE = 15000
@@ -33,9 +33,6 @@ EPSILON = 1e-8
 MOMENTUM = 0.9
 MAX_TO_KEEP = 5
 METADATA = False
-MOVING_AVERAGE_DECAY=0.9999
-LEARNING_RATE_DECAY_FACTOR=0.5
-NUM_STEPS_RATIO_PER_DECAY=0.3
 
 
 def get_arguments():
@@ -261,21 +258,12 @@ def main():
     loss = net.loss(input_batch=audio_batch,
                     global_condition_batch=gc_id_batch,
                     l2_regularization_strength=args.l2_regularization_strength)
-    global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
-    decay_steps = NUM_STEPS_RATIO_PER_DECAY * NUM_STEPS
-    lr = tf.train.exponential_decay(LEARNING_RATE,
-                                    global_step,
-                                    decay_steps,
-                                    LEARNING_RATE_DECAY_FACTOR,
-                                    staircase=True)
     optimizer = optimizer_factory[args.optimizer](
-                    learning_rate=lr,
-                    momentum=None)
+                    learning_rate=args.learning_rate,
+                    momentum=args.momentum)
     trainable = tf.trainable_variables()
-    optim = optimizer.minimize(loss, var_list=trainable, global_step=global_step)
-    ema = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
-    maintain_averages_op = tf.group(ema.apply(trainable))
-    train_op = tf.group(optim, maintain_averages_op)
+    optim = optimizer.minimize(loss, var_list=trainable)
+
     # Set up logging for TensorBoard.
     writer = tf.summary.FileWriter(logdir)
     writer.add_graph(tf.get_default_graph())
