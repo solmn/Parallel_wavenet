@@ -17,7 +17,7 @@ def log_prob_from_logits(x):
 	m = tf.reduce_max(x, axis, keepdims=True)
 	return x - m - tf.log(tf.reduce_sum(tf.exp(x-m), axis, keepdims=True))
 
-def discretized_mix_logistic_loss(y_hat, y, num_classes=256,log_scale_min=-7.0, reduce=True):
+def discretized_mix_logistic_loss(y_hat, y, num_classes=2**16,log_scale_min=-7.0, reduce=True):
 	nr_mix = 10
     #[Batch_size, time_length, channels]
 	#unpack parameters. [batch_size, time_length, num_mixtures] x 3
@@ -59,20 +59,12 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes=256,log_scale_min=-7.0, 
 		return -tf.expand_dims(log_sum_exp(log_probs), [-1])
 
 def sample_from_discretized_mix_logistic(y, log_scale_min=-7.):
-    	'''
-	Args:
-		y: Tensor, [batch_size, channels, time_length]
-	Returns:
-		Tensor: sample in range of [-1, 1]
-	'''
 	nr_mix = 10
 	logit_probs = y[:, :, :nr_mix]
-
 	#sample mixture indicator from softmax
 	temp = tf.random_uniform(tf.shape(logit_probs), minval=1e-5, maxval=1. - 1e-5)
 	temp = logit_probs - tf.log(-tf.log(temp))
 	argmax = tf.argmax(temp, -1)
-
 	#[batch_size, time_length] -> [batch_size, time_length, nr_mix]
 	one_hot = tf.one_hot(argmax, depth=nr_mix, dtype=tf.float32)
 	#select logistic parameters
