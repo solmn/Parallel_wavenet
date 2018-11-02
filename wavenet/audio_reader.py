@@ -58,6 +58,7 @@ def load_generic_audio(directory, sample_rate):
             category_id = int(ids[0][0])
         audio, _ = librosa.load(filename, sr=sample_rate, mono=True)
         audio = audio.reshape(-1, 1)
+        audio = audio / np.abs(audio).max() * 0.999
         yield audio, filename, category_id
 
 
@@ -169,7 +170,7 @@ class AudioReader(object):
                               "silence. Consider decreasing trim_silence "
                               "threshold, or adjust volume of the audio."
                               .format(filename))
-                audio = audio / np.abs(audio).max() * 0.999
+                
                 audio = np.pad(audio, [[self.receptive_field, 0], [0, 0]],
                                'constant')
 
