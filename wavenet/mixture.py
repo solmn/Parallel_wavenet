@@ -5,7 +5,7 @@ import tensorflow as tf
 def int_shape(x):
     return list(map(int, x.get_shape()))
 def log_sum_exp(x):
-    	""" numerically stable log_sum_exp implementation that prevents overflow """
+    """ numerically stable log_sum_exp implementation that prevents overflow """
 	axis = len(x.get_shape())-1
 	m = tf.reduce_max(x, axis)
 	m2 = tf.reduce_max(x, axis, keepdims=True)
@@ -18,7 +18,7 @@ def log_prob_from_logits(x):
 	return x - m - tf.log(tf.reduce_sum(tf.exp(x-m), axis, keepdims=True))
 
 def discretized_mix_logistic_loss(y_hat, y, num_classes=256,
-		log_scale_min=-7.0, reduce=True,nr_mix = 10):
+		log_scale_min=-7.0, reduce=True):
 	'''Discretized mix of logistic distributions loss.
 	Note that it is assumed that input is scaled to [-1, 1]
 	Args:
@@ -27,14 +27,11 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes=256,
 	Returns:
 		Tensor loss
 	'''
-
-
+	
 	#[Batch_size, time_length, channels]
-	# y_hat = tf.transpose(y_hat, [0, 2, 1])
-    
+
 	#unpack parameters. [batch_size, time_length, num_mixtures] x 3
-    
-	logit_probs = y_hat[:, :, :nr_mix] # (batch_size, time_length, nr_mix)
+	logit_probs = y_hat[:, :, :nr_mix]
 	means = y_hat[:, :, nr_mix:2 * nr_mix]
 	log_scales = tf.maximum(y_hat[:, :, 2* nr_mix: 3 * nr_mix], log_scale_min)
 
@@ -43,9 +40,9 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes=256,
 
 	centered_y = y - means
 	inv_stdv = tf.exp(-log_scales)
-	plus_in = inv_stdv * (centered_y + 0.5)
+	plus_in = inv_stdv * (centered_y + 1. / (num_classes - 1))
 	cdf_plus = tf.nn.sigmoid(plus_in)
-	min_in = inv_stdv * (centered_y - 0.5)
+	min_in = inv_stdv * (centered_y - 1. / (num_classes - 1))
 	cdf_min = tf.nn.sigmoid(min_in)
 
 	log_cdf_plus = plus_in - tf.nn.softplus(plus_in) # log probability for edge case of 0 (before scaling)
@@ -73,18 +70,14 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes=256,
 	else:
 		return -tf.expand_dims(log_sum_exp(log_probs), [-1])
 
-def sample_from_discretized_mix_logistic(y, log_scale_min = -7):
-    '''
+def sample_from_discretized_mix_logistic(y, log_scale_min=-7.):
+    	'''
 	Args:
 		y: Tensor, [batch_size, channels, time_length]
 	Returns:
 		Tensor: sample in range of [-1, 1]
 	'''
-	with tf.control_dependencies([tf.assert_equal(tf.mod(tf.shape(y)[1], 3), 0)]):
-		nr_mix = tf.shape(y)[1] // 3
-
-	#[batch_size, time_length, channels]
-	y = tf.transpose(y, [0, 2, 1])
+	
 	logit_probs = y[:, :, :nr_mix]
 
 	#sample mixture indicator from softmax
