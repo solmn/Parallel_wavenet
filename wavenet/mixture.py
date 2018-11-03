@@ -58,7 +58,7 @@ def discretized_mix_logistic_loss(y_hat, y, num_classes=2**16,log_scale_min=-7.0
 	else:
 		return -tf.expand_dims(log_sum_exp(log_probs), [-1])
 
-def sample_from_discretized_mix_logistic(y, log_scale_min=-7.):
+def sample_from_discretized_mix_logistic(y, log_scale_min=float(np.log(1e-14))):
 	nr_mix = 10
 	logit_probs = y[:, :, :nr_mix]
 	#sample mixture indicator from softmax
